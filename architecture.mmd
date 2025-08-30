@@ -1,0 +1,58 @@
+flowchart TB
+    subgraph Client["Client Layer"]
+        Browser["Web Browser"]
+    end
+
+    subgraph Frontend["Frontend Layer"]
+        Landing["landing<br>(React at api0.ai)"]
+        Dashboard["dashboard<br>(React at app.api0.ai)"]
+        Mayorana["mayorana<br>(NextJS app)"]
+    end
+
+    subgraph Backend["Backend Layer"]
+        Store["store<br>(Rust/gRPC - 50055)"]
+        Semantic["semantic<br>(Rust/Claude - 50053)"] 
+        Gateway["gateway<br>(Rust Backend)"]
+        AiUploader["ai-uploader<br>(Actix Web - 8080)"]  # Add this
+    end
+
+    subgraph Infrastructure["Infrastructure Layer"]
+        Logger["grpc-logger<br>(Rust/gRPC - 50052)"]
+        DuckDB[(DuckDB)]
+        PM2["PM2 Process Manager"]
+    end
+
+    Browser --> Landing
+    Browser --> Dashboard
+    Browser --> Mayorana
+    Landing --> Store
+    Dashboard --> Store
+    Mayorana --> Store
+    Mayorana --> gateway
+    Store --> gateway
+    Store --> DuckDB
+    gateway --> Store
+    gateway --> Store
+    
+    Store --> Logger
+    gateway --> Logger
+    gateway --> Logger
+    gateway --> AiUploader
+
+    PM2 --- Landing
+    PM2 --- Dashboard
+    PM2 --- Mayorana
+    PM2 --- Store
+    PM2 --- gateway
+    PM2 --- gateway
+    PM2 --- Logger
+
+    classDef frontend fill:#61DAFB,stroke:#61DAFB,color:#000
+    classDef backend fill:#F74C00,stroke:#F74C00,color:#fff
+    classDef infra fill:#6DB33F,stroke:#6DB33F,color:#fff
+    classDef client fill:#E5E5E5,stroke:#333,color:#333
+    
+    class Landing,Dashboard,Mayorana frontend
+    class Store,gateway,API0 backend
+    class Logger,DuckDB,PM2 infra
+    class Browser client
