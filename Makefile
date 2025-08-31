@@ -62,7 +62,7 @@ deploy:
 	@sudo cp $(CURDIR)/ecosystem.config.js $(APP_DIR)/
 	@sudo cp $(CURDIR)/server.js $(APP_DIR)/
 	@sudo chown $(SERVICE_USER):$(SERVICE_USER) $(APP_DIR)/Makefile $(APP_DIR)/ecosystem.config.js $(APP_DIR)/server.js
-	@sudo -u $(SERVICE_USER) bash -c 'cd $(APP_DIR) && make _deploy_as_service_user'
+	@sudo -u $(SERVICE_USER) bash -c 'cd $(APP_DIR) && PATH="/usr/local/bin:$PATH" make _deploy_as_service_user'
 	@echo -e "$(GREEN)Deployment complete!$(NC)"
 
 # Internal target run as service user
@@ -73,15 +73,6 @@ _deploy_as_service_user:
 	@$(MAKE) -f $(CURDIR)/Makefile _build_all
 	@$(MAKE) -f $(CURDIR)/Makefile _setup_configs
 	@$(MAKE) -f $(CURDIR)/Makefile _restart_services
-
-# Check dependencies
-_check_dependencies:
-	@echo -e "$(YELLOW)Checking dependencies...$(NC)"
-	@command -v git >/dev/null 2>&1 || { echo -e "$(RED)git not found$(NC)"; exit 1; }
-	@command -v node >/dev/null 2>&1 || { echo -e "$(RED)node not found$(NC)"; exit 1; }
-	@command -v yarn >/dev/null 2>&1 || { echo -e "$(RED)yarn not found$(NC)"; exit 1; }
-	@command -v pm2 >/dev/null 2>&1 || { echo -e "$(RED)pm2 not found$(NC)"; exit 1; }
-	@echo -e "$(GREEN)All dependencies satisfied$(NC)"
 
 # Clone or update repositories
 _clone_or_update:
@@ -126,6 +117,17 @@ _setup_configs:
 			echo "  version: 1.0.0" >> $repo/config.yaml; \
 		fi; \
 	done
+
+# Check dependencies
+_check_dependencies:
+	@echo -e "$(YELLOW)Checking dependencies...$(NC)"
+	@command -v git >/dev/null 2>&1 || { echo -e "$(RED)git not found$(NC)"; exit 1; }
+	@command -v node >/dev/null 2>&1 || { echo -e "$(RED)node not found$(NC)"; exit 1; }
+	@command -v yarn >/dev/null 2>&1 || { echo -e "$(RED)yarn not found$(NC)"; exit 1; }
+	@command -v pm2 >/dev/null 2>&1 || { echo -e "$(RED)pm2 not found$(NC)"; exit 1; }
+	@echo -e "$(GREEN)All dependencies satisfied$(NC)"
+	@# Copy ecosystem config
+	@cp $(CURDIR)/ecosystem.config.js .
 
 # Restart services with PM2
 _restart_services:
