@@ -58,10 +58,11 @@ setup-dirs:
 # Main deploy command - handles everything
 deploy:
 	@echo -e "$(GREEN)Starting unified deployment...$(NC)"
+	@sudo cp $(CURDIR)/Makefile $(APP_DIR)/
 	@sudo cp $(CURDIR)/ecosystem.config.js $(APP_DIR)/
 	@sudo cp $(CURDIR)/server.js $(APP_DIR)/
-	@sudo chown $(SERVICE_USER):$(SERVICE_USER) $(APP_DIR)/ecosystem.config.js $(APP_DIR)/server.js
-	@sudo -u $(SERVICE_USER) bash -c 'cd $(APP_DIR) && make -f $(CURDIR)/Makefile _deploy_as_service_user'
+	@sudo chown $(SERVICE_USER):$(SERVICE_USER) $(APP_DIR)/Makefile $(APP_DIR)/ecosystem.config.js $(APP_DIR)/server.js
+	@sudo -u $(SERVICE_USER) bash -c 'cd $(APP_DIR) && make _deploy_as_service_user'
 	@echo -e "$(GREEN)Deployment complete!$(NC)"
 
 # Internal target run as service user
