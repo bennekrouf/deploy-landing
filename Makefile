@@ -127,17 +127,6 @@ _setup_configs:
 		fi; \
 	done
 
-# Check dependencies
-_check_dependencies:
-	@echo -e "$(YELLOW)Checking dependencies...$(NC)"
-	@command -v git >/dev/null 2>&1 || { echo -e "$(RED)git not found$(NC)"; exit 1; }
-	@command -v node >/dev/null 2>&1 || { echo -e "$(RED)node not found$(NC)"; exit 1; }
-	@command -v yarn >/dev/null 2>&1 || { echo -e "$(RED)yarn not found$(NC)"; exit 1; }
-	@command -v pm2 >/dev/null 2>&1 || { echo -e "$(RED)pm2 not found$(NC)"; exit 1; }
-	@echo -e "$(GREEN)All dependencies satisfied$(NC)"
-	@# Copy ecosystem config
-	@cp $(CURDIR)/ecosystem.config.js .
-
 # Restart services with PM2
 _restart_services:
 	@echo -e "$(YELLOW)Restarting services with PM2...$(NC)"
