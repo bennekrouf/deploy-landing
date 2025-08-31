@@ -1,79 +1,102 @@
-# Deployment System
+# NextJS Deployment System
 
-A streamlined deployment system for NextJS applications: landing page and mayorana website.
+Linux-standard deployment system for NextJS applications using `/opt` directory structure.
 
-## 🚀 Overview
+## Overview
 
-This deployment system manages:
-
-- **landing** - NextJS landing page (apisensei.ai)
+Deploys and manages:
+- **landing** - NextJS landing page (api0.ai)  
 - **mayorana** - NextJS application (mayorana.ch)
-- **landing-solanize** - NextJS landing page (solanize project)
 
-## 📋 Requirements
+## Requirements
 
-- Debian-based Linux system
-- Node.js 18+ and Yarn
-- PM2 process manager (`npm install -g pm2`)
-- Git
+- Linux system (Ubuntu/Debian preferred)
+- Root access for initial setup
+- Dependencies: `git`, `node`, `yarn`, `pm2`
 
-## 🔧 Setup
+## Quick Start
 
 ```bash
-# Clone and setup
-make setup
+# One-time setup (creates user + directories + deploys)
+sudo make install
 
-# Build applications
-make build
-
-# Deploy
+# Or just deploy if already set up
 make deploy
 ```
 
-## ⚙️ Configuration
+## Architecture
 
-Each project uses `config.yaml` in its directory:
-- `landing/config.yaml`
-- `mayorana/config.yaml`
-- `landing-solanize/config.yaml`
+```
+/opt/api0/                    # Main deployment directory
+├── landing/                  # NextJS landing page
+├── mayorana/                 # NextJS application  
+├── logs/                     # All service logs
+├── config/                   # Global configurations
+├── backups/                  # Configuration backups
+└── ecosystem.config.js       # PM2 configuration
+```
 
-## 🛠️ Commands
+## Commands
 
 | Command | Description |
 |---------|-------------|
-| `make setup` | Clone repositories and setup |
-| `make build` | Build NextJS applications |
-| `make deploy` | Deploy with PM2 |
-| `make status` | Show PM2 status |
+| `make install` | Full setup: user + dirs + deploy |
+| `make deploy` | Clone/pull + build + restart services |
+| `make setup-user` | Create api0 service user |
+| `make setup-dirs` | Create /opt/api0 structure |
+| `make status` | Show PM2 service status |
 | `make logs SERVICE=name` | View service logs |
-| `make restart SERVICE=name` | Restart service |
-| `make stop SERVICE=name` | Stop service |
+| `make restart SERVICE=name` | Restart specific service |
+| `make stop` | Stop all services |
 | `make clean` | Clean build artifacts |
 
-## 📁 Structure
+## How It Works
 
-```
-deploy/
-├── scripts/
-│   ├── setup.sh
-│   ├── build.sh
-│   └── deploy.sh
-├── landing/          # NextJS landing page
-├── mayorana/         # NextJS application
-├── landing-solanize/ # NextJS solanize landing
-├── ecosystem.config.js
-├── Makefile
-└── README.md
+The `make deploy` command:
+1. **Updates Code**: Git clone (if new) or pull (if exists)
+2. **Builds**: yarn install + yarn build for both NextJS apps  
+3. **Configures**: Sets up YAML configs and PM2 ecosystem
+4. **Restarts**: PM2 reload for zero-downtime updates
+
+## Configuration
+
+Each service gets a `config.yaml`:
+```yaml
+service:
+  name: service-name  
+  version: 1.0.0
 ```
 
-## 📊 Monitoring
+## Monitoring
 
 ```bash
-# Real-time monitoring
-make monitor
+# Service status
+make status
 
-# Check logs
-make logs SERVICE=landing
-make logs SERVICE=mayorana
-make logs SERVICE=landing-solanize
+# Live logs
+make logs                    # All services
+make logs SERVICE=landing    # Specific service
+make logs SERVICE=mayorana   # Mayorana logs
+
+# PM2 monitoring dashboard
+sudo -u api0 pm2 monit
+```
+
+## Security
+
+- Services run as dedicated `api0` user (not root)
+- Files owned by `api0:api0` with proper permissions
+- Logs centralized in `/opt/api0/logs/`
+
+## Production Usage
+
+```bash
+# Deploy latest version
+make deploy
+
+# Check everything is running
+make status
+
+# View recent logs
+make logs | tail -50
 ```

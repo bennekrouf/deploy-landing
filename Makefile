@@ -1,8 +1,11 @@
-# api0 Deployment Makefile
+# api0 Deployment Makefile - Linux Standard with /opt
 
 # Variables
 SHELL := /bin/bash
 SERVICE ?= all
+DEPLOY_DIR := /opt/api0
+SERVICE_USER := api0
+SYSTEMD_DIR := /etc/systemd/system
 
 # Colors
 GREEN := \033[0;32m
@@ -10,133 +13,169 @@ YELLOW := \033[1;33m
 RED := \033[0;31m
 NC := \033[0m
 
-# Directories
-SCRIPT_DIR := ./scripts
-BACKUP_DIR := ./backups
+# Repository information
+REPOS := landing mayorana
 
-.PHONY: setup build deploy update monitor backup logs status restart stop clean help
+.PHONY: deploy setup-user setup-dirs logs status restart stop clean help install
 
 # Default target
 help:
-	@echo -e "$(GREEN)api0 Deployment System$(NC)"
+	@echo -e "$(GREEN)api0 Deployment System - Linux Standard$(NC)"
 	@echo -e "$(YELLOW)Available commands:$(NC)"
-	@echo "  make setup      - Initial setup of repositories and dependencies"
-	@echo "  make build      - Build all Rust and Node.js projects"
-	@echo "  make deploy     - Deploy all services"
-	@echo "  make update     - Update all services to latest version"
-	@echo "  make monitor    - Monitor running services"
-	@echo "  make backup     - Create a backup of data and configurations"
-	@echo "  make logs       - View logs for a specific service (use SERVICE=name)"
+	@echo "  make deploy     - One-command deploy (clone/pull + build + restart)"
+	@echo "  make setup-user - Create api0 service user"
+	@echo "  make setup-dirs - Create /opt/api0 directories"
+	@echo "  make logs       - View logs for service (use SERVICE=name)"
 	@echo "  make status     - Show status of all services"
-	@echo "  make restart    - Restart services (use SERVICE=name for specific service)"
-	@echo "  make stop       - Stop services (use SERVICE=name for specific service)"
-	@echo "  make clean      - Clean up temporary files and caches"
+	@echo "  make restart    - Restart services (use SERVICE=name for specific)"
+	@echo "  make stop       - Stop services"
+	@echo "  make clean      - Clean up temporary files"
+	@echo "  make install    - Full system installation (user + dirs + deploy)"
 
-# Initial setup
-setup:
-	@echo -e "$(YELLOW)Setting up api0 deployment system...$(NC)"
-	@mkdir -p $(SCRIPT_DIR) $(BACKUP_DIR)
-	@if [ ! -f $(SCRIPT_DIR)/setup.sh ]; then \
-		echo -e "$(RED)Error: $(SCRIPT_DIR)/setup.sh not found.$(NC)"; \
-		echo -e "Please create the setup script first."; \
-		exit 1; \
+# Full installation
+install: setup-user setup-dirs deploy
+	@echo -e "$(GREEN)Full installation complete.$(NC)"
+
+# Create service user
+setup-user:
+	@echo -e "$(YELLOW)Creating api0 service user...$(NC)"
+	@if ! id -u $(SERVICE_USER) >/dev/null 2>&1; then \
+		sudo useradd --system --home-dir $(DEPLOY_DIR) --shell /bin/bash $(SERVICE_USER); \
+		echo -e "$(GREEN)Created user $(SERVICE_USER)$(NC)"; \
+	else \
+		echo -e "$(YELLOW)User $(SERVICE_USER) already exists$(NC)"; \
 	fi
-	@chmod +x $(SCRIPT_DIR)/*.sh
-	@$(SCRIPT_DIR)/setup.sh
-	@echo -e "$(GREEN)Setup complete.$(NC)"
 
-# Build all projects
-build:
-	@echo -e "$(YELLOW)Building api0 services...$(NC)"
-	@if [ ! -f $(SCRIPT_DIR)/build.sh ]; then \
-		echo -e "$(RED)Error: $(SCRIPT_DIR)/build.sh not found.$(NC)"; \
-		echo -e "Please create the build script first."; \
-		exit 1; \
-	fi
-	@chmod +x $(SCRIPT_DIR)/build.sh
-	@$(SCRIPT_DIR)/build.sh
-	@echo -e "$(GREEN)Build complete.$(NC)"
+# Setup directories
+setup-dirs:
+	@echo -e "$(YELLOW)Setting up directories in /opt...$(NC)"
+	@sudo mkdir -p $(DEPLOY_DIR)
+	@sudo mkdir -p $(DEPLOY_DIR)/logs
+	@sudo mkdir -p $(DEPLOY_DIR)/config
+	@sudo mkdir -p $(DEPLOY_DIR)/backups
+	@sudo chown -R $(SERVICE_USER):$(SERVICE_USER) $(DEPLOY_DIR)
+	@sudo chmod 755 $(DEPLOY_DIR)
+	@echo -e "$(GREEN)Directories created in $(DEPLOY_DIR)$(NC)"
 
-# Deploy all services
+# Main deploy command - handles everything
 deploy:
-	@echo -e "$(YELLOW)Deploying api0 services...$(NC)"
-	@if [ ! -f $(SCRIPT_DIR)/deploy.sh ]; then \
-		echo -e "$(RED)Error: $(SCRIPT_DIR)/deploy.sh not found.$(NC)"; \
-		echo -e "Please create the deploy script first."; \
-		exit 1; \
-	fi
-	@$(SCRIPT_DIR)/deploy.sh
-	@echo -e "$(GREEN)Deployment complete.$(NC)"
+	@echo -e "$(GREEN)Starting unified deployment...$(NC)"
+	@sudo -u $(SERVICE_USER) bash -c 'cd $(DEPLOY_DIR) && $(MAKE) -f $(CURDIR)/Makefile _deploy_as_service_user'
+	@echo -e "$(GREEN)Deployment complete!$(NC)"
 
-# Update all services
-update:
-	@echo -e "$(YELLOW)Updating api0 services...$(NC)"
-	@for repo in store dashboard landing grpc-logger semantic mayorana gateway; do \
-		echo -e "$(YELLOW)Updating $repo...$(NC)"; \
-		(cd $repo && git pull && [ -f Cargo.toml ] && cargo build --release || true); \
-		(cd $repo && [ -f package.json ] && yarn install --frozen-lockfile || true); \
-	done
-	@pm2 reload all
-	@echo -e "$(GREEN)Update complete.$(NC)"
+# Internal target run as service user
+_deploy_as_service_user:
+	@echo -e "$(YELLOW)Running as $(SERVICE_USER) in $(DEPLOY_DIR)...$(NC)"
+	@$(MAKE) -f $(CURDIR)/Makefile _check_dependencies
+	@$(MAKE) -f $(CURDIR)/Makefile _clone_or_update
+	@$(MAKE) -f $(CURDIR)/Makefile _build_all
+	@$(MAKE) -f $(CURDIR)/Makefile _setup_configs
+	@$(MAKE) -f $(CURDIR)/Makefile _restart_services
 
-# Monitor services
-monitor:
-	@echo -e "$(YELLOW)Monitoring api0 services...$(NC)"
-	@pm2 monit
+# Check dependencies
+_check_dependencies:
+	@echo -e "$(YELLOW)Checking dependencies...$(NC)"
+	@command -v git >/dev/null 2>&1 || { echo -e "$(RED)git not found$(NC)"; exit 1; }
+	@command -v node >/dev/null 2>&1 || { echo -e "$(RED)node not found$(NC)"; exit 1; }
+	@command -v yarn >/dev/null 2>&1 || { echo -e "$(RED)yarn not found$(NC)"; exit 1; }
+	@command -v pm2 >/dev/null 2>&1 || { echo -e "$(RED)pm2 not found$(NC)"; exit 1; }
+	@echo -e "$(GREEN)All dependencies satisfied$(NC)"
 
-# Backup data and configurations
-backup:
-	@echo -e "$(YELLOW)Creating backup...$(NC)"
-	@mkdir -p $(BACKUP_DIR)
-	@TIMESTAMP=$(date +"%Y%m%d_%H%M%S"); \
-	for repo in store dashboard landing grpc-logger semantic mayorana gateway; do \
-		if [ -f $repo/config.yaml ]; then \
-			echo -e "$(YELLOW)Backing up $repo/config.yaml...$(NC)"; \
-			cp $repo/config.yaml $(BACKUP_DIR)/$repo-config-$TIMESTAMP.yaml; \
+# Clone or update repositories
+_clone_or_update:
+	@echo -e "$(YELLOW)Updating repositories...$(NC)"
+	@for repo in $(REPOS); do \
+		echo -e "$(YELLOW)Processing $$repo...$(NC)"; \
+		if [ -d "$$repo" ]; then \
+			echo -e "$(YELLOW)Updating $$repo...$(NC)"; \
+			(cd $$repo && git pull); \
+		else \
+			echo -e "$(YELLOW)Cloning $$repo...$(NC)"; \
+			git clone git@github.com:bennekrouf/$$repo.git $$repo; \
 		fi; \
 	done
-	@echo -e "$(GREEN)Backup complete.$(NC)"
 
-# View logs for a service
+# Build all projects
+_build_all:
+	@echo -e "$(YELLOW)Building all projects...$(NC)"
+	@# Build Node.js projects
+	@for repo in landing mayorana; do \
+		if [ -d "$repo" ]; then \
+			echo -e "$(YELLOW)Building Node.js project: $repo...$(NC)"; \
+			(cd $repo && yarn install --frozen-lockfile && yarn build); \
+		fi; \
+	done
+	@# Special handling for mayorana
+	@if [ -d "mayorana" ]; then \
+		echo -e "$(YELLOW)Setting up mayorana server.js...$(NC)"; \
+		if [ ! -f "mayorana/server.js" ]; then \
+			cp $(CURDIR)/server.js mayorana/server.js; \
+		fi; \
+	fi
+
+# Setup configuration files
+_setup_configs:
+	@echo -e "$(YELLOW)Setting up configurations...$(NC)"
+	@for repo in $(REPOS); do \
+		if [ -d "$$repo" ] && [ ! -f "$$repo/config.yaml" ]; then \
+			echo -e "$(YELLOW)Creating config for $$repo...$(NC)"; \
+			echo "service:" > $$repo/config.yaml; \
+			echo "  name: $$repo" >> $$repo/config.yaml; \
+			echo "  version: 1.0.0" >> $$repo/config.yaml; \
+		fi; \
+	done
+	@# Copy ecosystem config
+	@cp $(CURDIR)/ecosystem.config.js .
+
+# Restart services with PM2
+_restart_services:
+	@echo -e "$(YELLOW)Restarting services with PM2...$(NC)"
+	@if pm2 list | grep -q "landing\|mayorana"; then \
+		pm2 reload ecosystem.config.js; \
+	else \
+		pm2 start ecosystem.config.js; \
+	fi
+	@pm2 save
+
+# View logs
 logs:
 	@if [ "$(SERVICE)" = "all" ]; then \
-		echo -e "$(YELLOW)Viewing logs for all services...$(NC)"; \
-		pm2 logs; \
+		sudo -u $(SERVICE_USER) pm2 logs; \
 	else \
-		echo -e "$(YELLOW)Viewing logs for $(SERVICE)...$(NC)"; \
-		pm2 logs $(SERVICE); \
+		sudo -u $(SERVICE_USER) pm2 logs $(SERVICE); \
 	fi
 
 # Show status
 status:
 	@echo -e "$(YELLOW)api0 services status:$(NC)"
-	@pm2 status
+	@sudo -u $(SERVICE_USER) pm2 status
 
 # Restart services
 restart:
 	@if [ "$(SERVICE)" = "all" ]; then \
 		echo -e "$(YELLOW)Restarting all services...$(NC)"; \
-		pm2 restart all; \
+		sudo -u $(SERVICE_USER) pm2 restart all; \
 	else \
 		echo -e "$(YELLOW)Restarting $(SERVICE)...$(NC)"; \
-		pm2 restart $(SERVICE); \
+		sudo -u $(SERVICE_USER) pm2 restart $(SERVICE); \
 	fi
-	@echo -e "$(GREEN)Restart complete.$(NC)"
 
 # Stop services
 stop:
+	@echo -e "$(YELLOW)Stopping services...$(NC)"
 	@if [ "$(SERVICE)" = "all" ]; then \
-		echo -e "$(YELLOW)Stopping all services...$(NC)"; \
-		pm2 stop all; \
+		sudo -u $(SERVICE_USER) pm2 stop all; \
 	else \
-		echo -e "$(YELLOW)Stopping $(SERVICE)...$(NC)"; \
-		pm2 stop $(SERVICE); \
+		sudo -u $(SERVICE_USER) pm2 stop $(SERVICE); \
 	fi
-	@echo -e "$(GREEN)Stop complete.$(NC)"
 
 # Clean up
 clean:
 	@echo -e "$(YELLOW)Cleaning up...$(NC)"
-	@find . -name "*.log" -type f -delete
-	@find . -name "*.tmp" -type f -delete
-	@echo -e "$(GREEN)Clean complete.$(NC)"
+	@sudo -u $(SERVICE_USER) find $(DEPLOY_DIR) -name "*.log" -type f -delete 2>/dev/null || true
+	@sudo -u $(SERVICE_USER) find $(DEPLOY_DIR) -name "*.tmp" -type f -delete 2>/dev/null || true
+	@for repo in $(REPOS); do \
+		if [ -d "$(DEPLOY_DIR)/$$repo/target" ]; then \
+			sudo -u $(SERVICE_USER) rm -rf $(DEPLOY_DIR)/$$repo/target/debug; \
+		fi; \
+	done
