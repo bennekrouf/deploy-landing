@@ -3,9 +3,8 @@
 # Variables
 SHELL := /bin/bash
 SERVICE ?= all
-DEPLOY_DIR := /opt/api0
-SERVICE_USER := api0
-SYSTEMD_DIR := /etc/systemd/system
+APP_DIR := /opt/app
+SERVICE_USER := app
 
 # Colors
 GREEN := \033[0;32m
@@ -14,17 +13,17 @@ RED := \033[0;31m
 NC := \033[0m
 
 # Repository information
-REPOS := landing mayorana
+REPOS := api0-landing mayorana
 
 .PHONY: deploy setup-user setup-dirs logs status restart stop clean help install
 
 # Default target
 help:
-	@echo -e "$(GREEN)api0 Deployment System - Linux Standard$(NC)"
+	@echo -e "$(GREEN)App Deployment System$(NC)"
 	@echo -e "$(YELLOW)Available commands:$(NC)"
 	@echo "  make deploy     - One-command deploy (clone/pull + build + restart)"
-	@echo "  make setup-user - Create api0 service user"
-	@echo "  make setup-dirs - Create /opt/api0 directories"
+	@echo "  make setup-user - Create app service user"
+	@echo "  make setup-dirs - Create /opt/app directories"
 	@echo "  make logs       - View logs for service (use SERVICE=name)"
 	@echo "  make status     - Show status of all services"
 	@echo "  make restart    - Restart services (use SERVICE=name for specific)"
@@ -38,9 +37,9 @@ install: setup-user setup-dirs deploy
 
 # Create service user
 setup-user:
-	@echo -e "$(YELLOW)Creating api0 service user...$(NC)"
+	@echo -e "$(YELLOW)Creating app service user...$(NC)"
 	@if ! id -u $(SERVICE_USER) >/dev/null 2>&1; then \
-		sudo useradd --system --home-dir $(DEPLOY_DIR) --shell /bin/bash $(SERVICE_USER); \
+		sudo useradd --system --home-dir $(APP_DIR) --shell /bin/bash $(SERVICE_USER); \
 		echo -e "$(GREEN)Created user $(SERVICE_USER)$(NC)"; \
 	else \
 		echo -e "$(YELLOW)User $(SERVICE_USER) already exists$(NC)"; \
@@ -48,19 +47,21 @@ setup-user:
 
 # Setup directories
 setup-dirs:
-	@echo -e "$(YELLOW)Setting up directories in /opt...$(NC)"
-	@sudo mkdir -p $(DEPLOY_DIR)
-	@sudo mkdir -p $(DEPLOY_DIR)/logs
-	@sudo mkdir -p $(DEPLOY_DIR)/config
-	@sudo mkdir -p $(DEPLOY_DIR)/backups
-	@sudo chown -R $(SERVICE_USER):$(SERVICE_USER) $(DEPLOY_DIR)
-	@sudo chmod 755 $(DEPLOY_DIR)
-	@echo -e "$(GREEN)Directories created in $(DEPLOY_DIR)$(NC)"
+	@echo -e "$(YELLOW)Setting up directories in /opt/app...$(NC)"
+	@sudo mkdir -p $(APP_DIR)/logs
+	@sudo mkdir -p $(APP_DIR)/config
+	@sudo mkdir -p $(APP_DIR)/backups
+	@sudo chown -R $(SERVICE_USER):$(SERVICE_USER) $(APP_DIR)
+	@sudo chmod 755 $(APP_DIR)
+	@echo -e "$(GREEN)Directory created: $(APP_DIR)$(NC)"
 
 # Main deploy command - handles everything
 deploy:
 	@echo -e "$(GREEN)Starting unified deployment...$(NC)"
-	@sudo -u $(SERVICE_USER) bash -c 'cd $(DEPLOY_DIR) && $(MAKE) -f $(CURDIR)/Makefile _deploy_as_service_user'
+	@sudo cp $(CURDIR)/ecosystem.config.js $(APP_DIR)/
+	@sudo cp $(CURDIR)/server.js $(APP_DIR)/
+	@sudo chown $(SERVICE_USER):$(SERVICE_USER) $(APP_DIR)/ecosystem.config.js $(APP_DIR)/server.js
+	@sudo -u $(SERVICE_USER) bash -c 'cd $(APP_DIR) && make -f $(CURDIR)/Makefile _deploy_as_service_user'
 	@echo -e "$(GREEN)Deployment complete!$(NC)"
 
 # Internal target run as service user
@@ -117,13 +118,22 @@ _build_all:
 _setup_configs:
 	@echo -e "$(YELLOW)Setting up configurations...$(NC)"
 	@for repo in $(REPOS); do \
-		if [ -d "$$repo" ] && [ ! -f "$$repo/config.yaml" ]; then \
-			echo -e "$(YELLOW)Creating config for $$repo...$(NC)"; \
-			echo "service:" > $$repo/config.yaml; \
-			echo "  name: $$repo" >> $$repo/config.yaml; \
-			echo "  version: 1.0.0" >> $$repo/config.yaml; \
+		if [ -d "$repo" ] && [ ! -f "$repo/config.yaml" ]; then \
+			echo -e "$(YELLOW)Creating config for $repo...$(NC)"; \
+			echo "service:" > $repo/config.yaml; \
+			echo "  name: $repo" >> $repo/config.yaml; \
+			echo "  version: 1.0.0" >> $repo/config.yaml; \
 		fi; \
 	done
+
+# Check dependencies
+_check_dependencies:
+	@echo -e "$(YELLOW)Checking dependencies...$(NC)"
+	@command -v git >/dev/null 2>&1 || { echo -e "$(RED)git not found$(NC)"; exit 1; }
+	@command -v node >/dev/null 2>&1 || { echo -e "$(RED)node not found$(NC)"; exit 1; }
+	@command -v yarn >/dev/null 2>&1 || { echo -e "$(RED)yarn not found$(NC)"; exit 1; }
+	@command -v pm2 >/dev/null 2>&1 || { echo -e "$(RED)pm2 not found$(NC)"; exit 1; }
+	@echo -e "$(GREEN)All dependencies satisfied$(NC)"
 	@# Copy ecosystem config
 	@cp $(CURDIR)/ecosystem.config.js .
 

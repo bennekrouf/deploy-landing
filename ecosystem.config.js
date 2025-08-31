@@ -1,17 +1,17 @@
-// ecosystem.config.js - Linux Standard with /opt deployment
+// ecosystem.config.js - Single /opt/app directory
 
 const path = require('path');
 
-// Base directory is /opt/api0
-const BASE_DIR = '/opt/api0';
+// Single app directory containing both projects
+const APP_DIR = '/opt/app';
 
-console.log(`Base directory: ${BASE_DIR}`);
+console.log(`App directory: ${APP_DIR}`);
 
 module.exports = {
   apps: [
     {
-      name: "landing",
-      cwd: path.join(BASE_DIR, 'landing'),
+      name: "api0-landing",
+      cwd: path.join(APP_DIR, 'api0-landing'),
       script: "npm",
       args: "start",
       instances: 1,
@@ -21,15 +21,15 @@ module.exports = {
         PORT: 3005,
         CONFIG_PATH: "./config.yaml"
       },
-      error_file: path.join(BASE_DIR, 'logs/landing.error.log'),
-      out_file: path.join(BASE_DIR, 'logs/landing.out.log'),
-      log_file: path.join(BASE_DIR, 'logs/landing.log'),
+      error_file: path.join(APP_DIR, 'logs/api0-landing.error.log'),
+      out_file: path.join(APP_DIR, 'logs/api0-landing.out.log'),
+      log_file: path.join(APP_DIR, 'logs/api0-landing.log'),
       time: true,
       max_memory_restart: "500M"
     },
     {
       name: "mayorana",
-      cwd: path.join(BASE_DIR, 'mayorana'),
+      cwd: path.join(APP_DIR, 'mayorana'),
       script: "node",
       args: "server.js",
       instances: 1,
@@ -39,9 +39,9 @@ module.exports = {
         PORT: 3006,
         CONFIG_PATH: "./config.yaml"
       },
-      error_file: path.join(BASE_DIR, 'logs/mayorana.error.log'),
-      out_file: path.join(BASE_DIR, 'logs/mayorana.out.log'),
-      log_file: path.join(BASE_DIR, 'logs/mayorana.log'),
+      error_file: path.join(APP_DIR, 'logs/mayorana.error.log'),
+      out_file: path.join(APP_DIR, 'logs/mayorana.out.log'),
+      log_file: path.join(APP_DIR, 'logs/mayorana.log'),
       time: true,
       max_memory_restart: "500M"
     }
